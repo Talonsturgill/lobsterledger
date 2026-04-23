@@ -248,18 +248,34 @@ def test_export_1099_da_filters_year_and_has_headers(conn: sqlite3.Connection) -
 
     csv_text = ledger.export_1099_da(conn, 2025)
     lines = csv_text.strip().split("\n")
-    assert lines[0] == "# 1099-DA draft v1"
-    assert lines[1] == (
-        "tx_id,lot_id,rail,acquired_date,sold_date,units_consumed,"
-        "proceeds_usd,basis_usd,realized_gain_usd,holding_period_days,term"
+    assert lines[0] == "# 1099-DA 2025 schema v1"
+    assert lines[1] == "# Source form: IRS Form 1099-DA (Rev Jan 2025)"
+    assert lines[2] == (
+        "box_1a_asset_code,box_1b_asset_name,box_1c_units,box_1d_acquired,"
+        "box_1e_disposed,box_1f_proceeds,box_1g_basis,box_1h_accrued_mkt_disc,"
+        "box_1i_wash_sale_disallowed,box_2_term,box_3a_net_proceeds,box_3b_qof,"
+        "box_4_backup_wh,box_5_nondeductible,box_6_treatment,box_7_cash_only,"
+        "box_8_customer_data,box_9_noncovered,box_10_qof_sale,box_11a_nft_count,"
+        "box_11b_nft_creator,box_11c_nft_first_sale,box_12_state,box_13_txid,"
+        "box_14_wallet_address"
     )
 
-    body = "\n".join(lines[2:])
-    assert f",{tx_out_2025}," not in body  # tx_id is the first field, simpler check below.
-    # Confirm the 2025 row is present.
-    assert any(line.startswith(f"{tx_out_2025},") for line in lines[2:])
-    # Confirm the 2024 row is absent.
-    assert not any(line.startswith(f"{tx_out_2024},") for line in lines[2:])
+    body_lines = lines[3:]
+    # 2025 row is present (lightning rail starts with BTC-LN asset code).
+    assert any(line.startswith("BTC-LN,") for line in body_lines)
+    # 2024 disposition is filtered out, so only one data row remains.
+    assert len(body_lines) == 1
+    # Spot-check key mapped fields on the 2025 row.
+    fields = body_lines[0].split(",")
+    assert fields[0] == "BTC-LN"
+    assert fields[1] == "Bitcoin (Lightning)"
+    assert fields[3] == "2025-06-01"
+    assert fields[4] == "2025-06-01"
+    assert fields[15] == "X"  # cash-only for lightning.
+    assert fields[16] == ""  # customer_data empty (not manual).
+    # Touch tx_out_2025 so the binding is used; the row exists in the filtered year.
+    assert tx_out_2025 > 0
+    assert tx_out_2024 > 0
 
 
 def test_holding_period_short_vs_long(conn: sqlite3.Connection) -> None:

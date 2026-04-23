@@ -100,9 +100,9 @@ class PaymentRequest(BaseModel):
         # Native amounts anchor lot accounting on both sides of the trade, so
         # outbound and inbound must each carry the correct native unit for rail.
         if self.rail == "lightning" and self.amount_sats is None:
-            raise ValueError("amount_sats is required when rail is 'lightning'")
+            raise ValueError("amount_sats is required when rail is 'lightning'")  # noqa: TRY003
         if self.rail == "base" and self.amount_usdc_micro is None:
-            raise ValueError("amount_usdc_micro is required when rail is 'base'")
+            raise ValueError("amount_usdc_micro is required when rail is 'base'")  # noqa: TRY003
         return self
 
 

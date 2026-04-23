@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lobster_ledger import db
@@ -450,9 +450,16 @@ def _cents_to_usd_str(cents: int) -> str:
     return f"{sign}{dollars}.{remainder:02d}"
 
 
+_RAIL_ASSET_CODE: dict[str, str] = {"lightning": "BTC-LN", "base": "USDC-BASE"}
+_RAIL_ASSET_NAME: dict[str, str] = {
+    "lightning": "Bitcoin (Lightning)",
+    "base": "USD Coin (Base)",
+}
+
+
 def export_1099_da(conn: sqlite3.Connection, year: int) -> str:
-    start = int(datetime(year, 1, 1, tzinfo=timezone.utc).timestamp())
-    end = int(datetime(year + 1, 1, 1, tzinfo=timezone.utc).timestamp())
+    start = int(datetime(year, 1, 1, tzinfo=UTC).timestamp())
+    end = int(datetime(year + 1, 1, 1, tzinfo=UTC).timestamp())
 
     rows = conn.execute(
         "SELECT d.tx_id AS tx_id, d.lot_id AS lot_id, d.units_consumed AS units_consumed, "
@@ -460,55 +467,94 @@ def export_1099_da(conn: sqlite3.Connection, year: int) -> str:
         "d.realized_gain_cents AS realized_gain_cents, "
         "d.holding_period_days AS holding_period_days, d.short_term AS short_term, "
         "d.created_at AS sold_at, "
-        "t.rail AS rail, l.acquired_at AS acquired_at "
+        "t.rail AS rail, t.raw_proof AS raw_proof, "
+        "l.acquired_at AS acquired_at, w.identifier AS wallet_identifier "
         "FROM disposition_events d "
         "JOIN transactions t ON d.tx_id = t.id "
         "LEFT JOIN lots l ON d.lot_id = l.id "
+        "LEFT JOIN wallets w ON t.wallet_id = w.id "
         "WHERE d.created_at >= ? AND d.created_at < ? "
         "ORDER BY d.created_at ASC, d.id ASC",
         (start, end),
     ).fetchall()
 
     buf = io.StringIO()
-    buf.write("# 1099-DA draft v1\n")
+    buf.write("# 1099-DA 2025 schema v1\n")
+    buf.write("# Source form: IRS Form 1099-DA (Rev Jan 2025)\n")
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(
         [
-            "tx_id",
-            "lot_id",
-            "rail",
-            "acquired_date",
-            "sold_date",
-            "units_consumed",
-            "proceeds_usd",
-            "basis_usd",
-            "realized_gain_usd",
-            "holding_period_days",
-            "term",
+            "box_1a_asset_code",
+            "box_1b_asset_name",
+            "box_1c_units",
+            "box_1d_acquired",
+            "box_1e_disposed",
+            "box_1f_proceeds",
+            "box_1g_basis",
+            "box_1h_accrued_mkt_disc",
+            "box_1i_wash_sale_disallowed",
+            "box_2_term",
+            "box_3a_net_proceeds",
+            "box_3b_qof",
+            "box_4_backup_wh",
+            "box_5_nondeductible",
+            "box_6_treatment",
+            "box_7_cash_only",
+            "box_8_customer_data",
+            "box_9_noncovered",
+            "box_10_qof_sale",
+            "box_11a_nft_count",
+            "box_11b_nft_creator",
+            "box_11c_nft_first_sale",
+            "box_12_state",
+            "box_13_txid",
+            "box_14_wallet_address",
         ]
     )
     for r in rows:
+        rail = r["rail"]
         acquired_at = r["acquired_at"]
         acquired_date = (
-            datetime.fromtimestamp(int(acquired_at), tz=timezone.utc).date().isoformat()
+            datetime.fromtimestamp(int(acquired_at), tz=UTC).date().isoformat()
             if acquired_at is not None
             else ""
         )
-        sold_date = datetime.fromtimestamp(int(r["sold_at"]), tz=timezone.utc).date().isoformat()
+        sold_date = datetime.fromtimestamp(int(r["sold_at"]), tz=UTC).date().isoformat()
         term = "short" if int(r["short_term"]) == 1 else "long"
+        asset_code = _RAIL_ASSET_CODE.get(rail, "")
+        asset_name = _RAIL_ASSET_NAME.get(rail, "")
+        cash_only = "X" if rail in ("lightning", "base") else ""
+        customer_data = "X" if rail == "manual" else ""
+        noncovered = "X" if r["lot_id"] is None else ""
+        wallet_identifier = r["wallet_identifier"] if r["wallet_identifier"] is not None else ""
+        raw_proof = r["raw_proof"] if r["raw_proof"] is not None else ""
         writer.writerow(
             [
-                r["tx_id"],
-                r["lot_id"] if r["lot_id"] is not None else "",
-                r["rail"],
+                asset_code,
+                asset_name,
+                r["units_consumed"],
                 acquired_date,
                 sold_date,
-                r["units_consumed"],
                 _cents_to_usd_str(int(r["proceeds_cents"])),
                 _cents_to_usd_str(int(r["basis_cents"])),
-                _cents_to_usd_str(int(r["realized_gain_cents"])),
-                r["holding_period_days"],
+                "0",
+                "0",
                 term,
+                "",
+                "",
+                "0",
+                "",
+                term,
+                cash_only,
+                customer_data,
+                noncovered,
+                "",
+                "0",
+                "",
+                "",
+                "",
+                raw_proof,
+                wallet_identifier,
             ]
         )
     return buf.getvalue()

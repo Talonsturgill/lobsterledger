@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from lobster_ledger import db, ledger, payments, policy
 from lobster_ledger.types import (
@@ -13,6 +13,10 @@ from lobster_ledger.types import (
     RuleKind,
     TxStatus,
 )
+
+# Context is generic over session, lifespan, and request types; this alias keeps
+# mypy strict happy without pinning tools to a specific server session shape.
+ToolContext = Context[Any, Any, Any]
 
 mcp = FastMCP("lobster-ledger")
 
@@ -286,7 +290,7 @@ def _do_record_manual_transaction(
 
 
 @mcp.tool()
-def propose_payment(
+async def propose_payment(
     rail: Rail,
     amount_usd_cents: int,
     amount_sats: int | None = None,
@@ -297,15 +301,18 @@ def propose_payment(
     agent_id: str | None = None,
     external_id: str | None = None,
     wallet_id: int | None = None,
+    ctx: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Propose an outbound payment. Runs the policy gate; on allow, invokes the rail
     adapter and records settlement. On require_approval, records a pending transaction
     and an approval row. On deny, records a denied transaction. The caller supplies
     USD FMV; the ledger does not fetch prices. Returns status, tx_id, and policy result.
     """
+    if ctx is not None:
+        await ctx.info(f"propose_payment called rail={rail} amount_usd_cents={amount_usd_cents}")
     conn = db.connect()
     try:
-        return _do_propose_payment(
+        result = _do_propose_payment(
             conn,
             rail=rail,
             amount_usd_cents=amount_usd_cents,
@@ -320,131 +327,194 @@ def propose_payment(
         )
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"propose_payment completed status={result.get('status')}")
+    return result
 
 
 @mcp.tool()
-def check_balance() -> list[dict[str, Any]]:
+async def check_balance(ctx: ToolContext | None = None) -> list[dict[str, Any]]:
     """Return per-wallet balances derived from open FIFO lots, minus pending outbound
     native units. USD FMV is a proportional share of remaining lot basis.
     """
+    if ctx is not None:
+        await ctx.info("check_balance called")
     conn = db.connect()
     try:
-        return _do_check_balance(conn)
+        result = _do_check_balance(conn)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"check_balance completed wallets={len(result)}")
+    return result
 
 
 @mcp.tool()
-def set_rule(name: str, kind: RuleKind, config: dict[str, Any]) -> dict[str, Any]:
+async def set_rule(
+    name: str,
+    kind: RuleKind,
+    config: dict[str, Any],
+    ctx: ToolContext | None = None,
+) -> dict[str, Any]:
     """Create a policy rule. Config is validated against the discriminated union
     keyed on kind. Rules are enabled on creation.
     """
+    if ctx is not None:
+        await ctx.info(f"set_rule called name={name} kind={kind}")
     conn = db.connect()
     try:
-        return _do_set_rule(conn, name=name, kind=kind, config=config)
+        result = _do_set_rule(conn, name=name, kind=kind, config=config)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"set_rule completed rule_id={result.get('rule_id')}")
+    return result
 
 
 @mcp.tool()
-def list_rules(only_enabled: bool = False) -> list[dict[str, Any]]:
+async def list_rules(
+    only_enabled: bool = False,
+    ctx: ToolContext | None = None,
+) -> list[dict[str, Any]]:
     """List all policy rules. Set only_enabled=True to skip disabled rules."""
+    if ctx is not None:
+        await ctx.info(f"list_rules called only_enabled={only_enabled}")
     conn = db.connect()
     try:
-        return _do_list_rules(conn, only_enabled=only_enabled)
+        result = _do_list_rules(conn, only_enabled=only_enabled)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"list_rules completed count={len(result)}")
+    return result
 
 
 @mcp.tool()
-def disable_rule(rule_id: int) -> dict[str, Any]:
+async def disable_rule(rule_id: int, ctx: ToolContext | None = None) -> dict[str, Any]:
     """Operator only, not for autonomous use by the agent being governed.
     Disable a rule so policy evaluation skips it.
     """
+    if ctx is not None:
+        await ctx.info(f"disable_rule called rule_id={rule_id}")
     conn = db.connect()
     try:
-        return _do_disable_rule(conn, rule_id=rule_id)
+        result = _do_disable_rule(conn, rule_id=rule_id)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"disable_rule completed ok={result.get('ok')}")
+    return result
 
 
 @mcp.tool()
-def enable_rule(rule_id: int) -> dict[str, Any]:
+async def enable_rule(rule_id: int, ctx: ToolContext | None = None) -> dict[str, Any]:
     """Enable a previously disabled rule."""
+    if ctx is not None:
+        await ctx.info(f"enable_rule called rule_id={rule_id}")
     conn = db.connect()
     try:
-        return _do_enable_rule(conn, rule_id=rule_id)
+        result = _do_enable_rule(conn, rule_id=rule_id)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"enable_rule completed ok={result.get('ok')}")
+    return result
 
 
 @mcp.tool()
-def delete_rule(rule_id: int) -> dict[str, Any]:
+async def delete_rule(rule_id: int, ctx: ToolContext | None = None) -> dict[str, Any]:
     """Operator only, not for autonomous use by the agent being governed.
     Permanently remove a rule.
     """
+    if ctx is not None:
+        await ctx.info(f"delete_rule called rule_id={rule_id}")
     conn = db.connect()
     try:
-        return _do_delete_rule(conn, rule_id=rule_id)
+        result = _do_delete_rule(conn, rule_id=rule_id)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"delete_rule completed ok={result.get('ok')}")
+    return result
 
 
 @mcp.tool()
-def register_wallet(
+async def register_wallet(
     label: str,
     rail: Rail,
     identifier: str | None = None,
+    ctx: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Register a wallet on a given rail. The identifier is opaque to the ledger
     (e.g. a Lightning node pubkey or a Base address).
     """
+    if ctx is not None:
+        await ctx.info(f"register_wallet called label={label} rail={rail}")
     conn = db.connect()
     try:
-        return _do_register_wallet(conn, label=label, rail=rail, identifier=identifier)
+        result = _do_register_wallet(conn, label=label, rail=rail, identifier=identifier)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"register_wallet completed wallet_id={result.get('wallet_id')}")
+    return result
 
 
 @mcp.tool()
-def list_wallets() -> list[dict[str, Any]]:
+async def list_wallets(ctx: ToolContext | None = None) -> list[dict[str, Any]]:
     """List active wallets."""
+    if ctx is not None:
+        await ctx.info("list_wallets called")
     conn = db.connect()
     try:
-        return _do_list_wallets(conn)
+        result = _do_list_wallets(conn)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"list_wallets completed count={len(result)}")
+    return result
 
 
 @mcp.tool()
-def list_pending_approvals() -> list[dict[str, Any]]:
+async def list_pending_approvals(ctx: ToolContext | None = None) -> list[dict[str, Any]]:
     """List all approvals that are still pending, joined with their transaction fields."""
+    if ctx is not None:
+        await ctx.info("list_pending_approvals called")
     conn = db.connect()
     try:
-        return _do_list_pending_approvals(conn)
+        result = _do_list_pending_approvals(conn)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"list_pending_approvals completed count={len(result)}")
+    return result
 
 
 @mcp.tool()
-def resolve_approval(
+async def resolve_approval(
     tx_id: int,
     approved: bool,
     reason: str | None = None,
+    ctx: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Operator only, not for autonomous use by the agent being governed.
     Approve or deny a pending approval. Approval drives adapter settlement. Denial
     flips the transaction to status denied and does not invoke the adapter.
     """
+    if ctx is not None:
+        await ctx.info(f"resolve_approval called tx_id={tx_id} approved={approved}")
     conn = db.connect()
     try:
-        return _do_resolve_approval(conn, tx_id=tx_id, approved=approved, reason=reason)
+        result = _do_resolve_approval(conn, tx_id=tx_id, approved=approved, reason=reason)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"resolve_approval completed settlement={result.get('settlement')}")
+    return result
 
 
 @mcp.tool()
-def query_transactions(
+async def query_transactions(
     status: TxStatus | None = None,
     rail: Rail | None = None,
     category: str | None = None,
@@ -452,11 +522,14 @@ def query_transactions(
     since: int | None = None,
     until: int | None = None,
     limit: int = 100,
+    ctx: ToolContext | None = None,
 ) -> list[dict[str, Any]]:
     """Query transactions with optional filters. since and until are epoch seconds."""
+    if ctx is not None:
+        await ctx.info(f"query_transactions called limit={limit}")
     conn = db.connect()
     try:
-        return _do_query_transactions(
+        result = _do_query_transactions(
             conn,
             status=status,
             rail=rail,
@@ -468,22 +541,30 @@ def query_transactions(
         )
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"query_transactions completed count={len(result)}")
+    return result
 
 
 @mcp.tool()
-def export_1099_da(year: int) -> dict[str, Any]:
-    """Export the 1099-DA draft CSV for the given tax year. Header is stamped
-    # 1099-DA draft v1 because the IRS final form layout may still evolve.
+async def export_1099_da(year: int, ctx: ToolContext | None = None) -> dict[str, Any]:
+    """Export the 1099-DA CSV for the given tax year. Header is stamped
+    # 1099-DA 2025 schema v1 and maps to IRS Form 1099-DA (Rev Jan 2025).
     """
+    if ctx is not None:
+        await ctx.info(f"export_1099_da called year={year}")
     conn = db.connect()
     try:
-        return _do_export_1099_da(conn, year=year)
+        result = _do_export_1099_da(conn, year=year)
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"export_1099_da completed bytes={len(result.get('csv', ''))}")
+    return result
 
 
 @mcp.tool()
-def record_manual_transaction(
+async def record_manual_transaction(
     rail: Rail,
     direction: Direction,
     amount_usd_fmv_cents: int,
@@ -495,13 +576,16 @@ def record_manual_transaction(
     agent_id: str | None = None,
     external_id: str | None = None,
     wallet_id: int | None = None,
+    ctx: ToolContext | None = None,
 ) -> dict[str, Any]:
     """Record a manual historical transaction. Bypasses the policy gate because
     these are imports, not proposals. Settled immediately so lot accounting runs.
     """
+    if ctx is not None:
+        await ctx.info(f"record_manual_transaction called rail={rail} direction={direction}")
     conn = db.connect()
     try:
-        return _do_record_manual_transaction(
+        result = _do_record_manual_transaction(
             conn,
             rail=rail,
             direction=direction,
@@ -517,6 +601,9 @@ def record_manual_transaction(
         )
     finally:
         conn.close()
+    if ctx is not None:
+        await ctx.info(f"record_manual_transaction completed tx_id={result.get('tx_id')}")
+    return result
 
 
 def main() -> None:

@@ -317,10 +317,16 @@ def test_export_1099_da_emits_header(conn: sqlite3.Connection) -> None:
     year = int(row["y"])
     result = _do_export_1099_da(conn, year=year)
     csv_text = result["csv"]
-    assert csv_text.startswith("# 1099-DA draft v1\n")
+    assert csv_text.startswith("# 1099-DA 2025 schema v1\n")
+    assert "# Source form: IRS Form 1099-DA (Rev Jan 2025)" in csv_text
     assert (
-        "tx_id,lot_id,rail,acquired_date,sold_date,units_consumed,"
-        "proceeds_usd,basis_usd,realized_gain_usd,holding_period_days,term"
+        "box_1a_asset_code,box_1b_asset_name,box_1c_units,box_1d_acquired,"
+        "box_1e_disposed,box_1f_proceeds,box_1g_basis,box_1h_accrued_mkt_disc,"
+        "box_1i_wash_sale_disallowed,box_2_term,box_3a_net_proceeds,box_3b_qof,"
+        "box_4_backup_wh,box_5_nondeductible,box_6_treatment,box_7_cash_only,"
+        "box_8_customer_data,box_9_noncovered,box_10_qof_sale,box_11a_nft_count,"
+        "box_11b_nft_creator,box_11c_nft_first_sale,box_12_state,box_13_txid,"
+        "box_14_wallet_address"
     ) in csv_text
 
 
