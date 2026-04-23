@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lobster-ledger": {
+      "command": "lobster-ledger",
+      "env": {
+        "LOBSTER_LEDGER_DB": "/home/CHANGE_ME/.lobster-ledger/ledger.db"
+      }
+    }
+  }
+}
