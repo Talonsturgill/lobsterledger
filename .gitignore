@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution and builds
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+
+# Testing and type checkers
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Ledger runtime
+*.db
+.lobster-ledger/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
