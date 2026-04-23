@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Overview - Lobster Ledger{% endblock %}
+{% block content %}
+<section class="cards">
+<article><h2>Active wallets</h2><p class="big">{{ stats.active_wallets }}</p></article>
+<article><h2>Pending approvals</h2><p class="big">{{ stats.pending_approvals }}</p></article>
+<article><h2>Transactions</h2><p class="big">{{ stats.total_transactions }}</p></article>
+<article><h2>Settled</h2><p class="big">{{ stats.settled_transactions }}</p></article>
+<article><h2>Denied</h2><p class="big">{{ stats.denied_transactions }}</p></article>
+<article><h2>Enabled rules</h2><p class="big">{{ stats.enabled_rules }}</p></article>
+</section>
+{% endblock %}

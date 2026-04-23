@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Lobster Ledger{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header>
+<h1>Lobster Ledger</h1>
+<nav>
+<a href="/">Home</a>
+<a href="/approvals">Approvals</a>
+<a href="/transactions">Transactions</a>
+<a href="/wallets">Wallets</a>
+<a href="/rules">Rules</a>
+</nav>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

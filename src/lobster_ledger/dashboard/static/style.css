@@ -1,0 +1,17 @@
+:root { --bg:#111; --fg:#eee; --accent:#d85a2a; --muted:#444; --card:#1c1c1c; }
+* { box-sizing: border-box; }
+body { background:var(--bg); color:var(--fg); font-family: system-ui, sans-serif; margin: 0; }
+header { padding: 1rem 2rem; border-bottom: 1px solid var(--muted); display:flex; align-items:baseline; gap:2rem; }
+h1 { margin: 0; color: var(--accent); font-size: 1.3rem; }
+nav a { color: var(--fg); text-decoration: none; margin-right: 1rem; }
+nav a:hover { color: var(--accent); }
+main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+article { background: var(--card); padding: 1rem; border-radius: 6px; }
+.big { font-size: 2rem; margin: 0.2rem 0; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--muted); }
+button { background: var(--accent); color: var(--bg); border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--muted); }
+form { display: grid; gap: 0.5rem; max-width: 500px; }
+input, select, textarea { padding: 0.4rem; background: var(--card); color: var(--fg); border: 1px solid var(--muted); border-radius: 4px; }
